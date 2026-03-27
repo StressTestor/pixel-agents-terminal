@@ -93,7 +93,7 @@ fn transcript_to_fsm(evt: &TranscriptEvent) -> FsmEvent {
         }
         TranscriptEvent::ToolEnd { .. } => FsmEvent::ToolEnd,
         TranscriptEvent::PermissionPrompt { .. } => FsmEvent::PermissionPrompt,
-        TranscriptEvent::TurnEnd => FsmEvent::DespawnTimeout,
+        TranscriptEvent::TurnEnd => FsmEvent::ToolEnd,
     }
 }
 
@@ -287,13 +287,7 @@ pub async fn run(
 
             let events = agent.reader.read_new_events();
             for evt in &events {
-                // TurnEnd from transcript is not a despawn trigger -
-                // it just means the model turn ended. Map it to ToolEnd
-                // instead, since TurnEnd roughly means "done doing stuff."
-                let fsm_event = match evt {
-                    TranscriptEvent::TurnEnd => FsmEvent::ToolEnd,
-                    other => transcript_to_fsm(other),
-                };
+                let fsm_event = transcript_to_fsm(evt);
 
                 let (new_state, effects) = agent::transition(agent.state, fsm_event);
                 agent.state = new_state;
