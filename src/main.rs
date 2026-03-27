@@ -23,8 +23,8 @@ struct Cli {
     #[arg(long, default_value_t = 10)]
     fps: u32,
 
-    /// Display scale multiplier (unused, reserved for future)
-    #[arg(long, default_value_t = 1)]
+    /// Display scale multiplier (1-4, default 2)
+    #[arg(long, default_value_t = 2)]
     scale: u32,
 }
 

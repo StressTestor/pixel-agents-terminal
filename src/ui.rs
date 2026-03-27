@@ -135,7 +135,7 @@ fn pick_overflow_tile(grid: &Grid, tick: u64) -> Pos {
 pub async fn run(
     project: Option<PathBuf>,
     fps: u32,
-    _scale: u32,
+    scale: u32,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let watch_root = match project {
         Some(p) => p,
@@ -224,7 +224,7 @@ pub async fn run(
             }
             // Still render if forced, but skip simulation
             if generation > last_rendered || force_render {
-                render_scene(&grid, &agents, &mut stdout, paused, fps)?;
+                render_scene(&grid, &agents, &mut stdout, paused, fps, scale)?;
                 last_rendered = generation;
             }
             continue;
@@ -387,7 +387,7 @@ pub async fn run(
         }
 
         if generation > last_rendered {
-            render_scene(&grid, &agents, &mut stdout, paused, fps)?;
+            render_scene(&grid, &agents, &mut stdout, paused, fps, scale)?;
             last_rendered = generation;
         }
     };
@@ -462,6 +462,7 @@ fn render_scene(
     stdout: &mut io::Stdout,
     paused: bool,
     fps: u32,
+    scale: u32,
 ) -> io::Result<()> {
     // Build agent views
     let agent_views: Vec<AgentView> = agents
@@ -478,13 +479,12 @@ fn render_scene(
 
     // Composite and render
     let img = scene::composite_scene(grid, &agent_views);
-    let frame_bytes = renderer::render_frame(&img);
+    let frame_bytes = renderer::render_frame(&img, scale);
     stdout.write_all(&frame_bytes)?;
 
     // Status bar below the image
-    // Image height in terminal rows: pixel_height / cell_height
-    // Kitty places the image at cursor; we move below it
-    let image_rows = (GRID_HEIGHT as u32 * TILE_SIZE) / 16 + 1; // rough estimate: 16px per cell row
+    // Image height in terminal rows: (pixel_height * scale) / cell_height
+    let image_rows = (GRID_HEIGHT as u32 * TILE_SIZE * scale.max(1)) / 16 + 1;
     execute!(
         stdout,
         cursor::MoveTo(0, image_rows as u16)

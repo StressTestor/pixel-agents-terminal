@@ -42,12 +42,25 @@ pub fn chunk_kitty_payload(header: &str, base64_data: &[u8]) -> Vec<Vec<u8>> {
     chunks
 }
 
-pub fn render_frame(img: &ImageBuffer<Rgba<u8>, Vec<u8>>) -> Vec<u8> {
-    let width = img.width();
-    let height = img.height();
+pub fn render_frame(img: &ImageBuffer<Rgba<u8>, Vec<u8>>, scale: u32) -> Vec<u8> {
+    let scale = scale.max(1);
 
-    let raw_rgba = img.as_raw();
-    let b64 = STANDARD.encode(raw_rgba);
+    // Scale the image if needed (nearest-neighbor preserves pixel art crispness)
+    let (raw_rgba, width, height) = if scale > 1 {
+        let scaled = image::imageops::resize(
+            img,
+            img.width() * scale,
+            img.height() * scale,
+            image::imageops::FilterType::Nearest,
+        );
+        let w = scaled.width();
+        let h = scaled.height();
+        (scaled.into_raw(), w, h)
+    } else {
+        (img.as_raw().clone(), img.width(), img.height())
+    };
+
+    let b64 = STANDARD.encode(&raw_rgba);
     let b64_bytes = b64.as_bytes();
 
     let header = format!("a=T,f=32,s={},v={},q=2,C=1", width, height);
@@ -136,7 +149,7 @@ mod tests {
     fn test_render_frame_structure() {
         use image::{ImageBuffer, Rgba};
         let img = ImageBuffer::from_fn(2, 2, |_x, _y| Rgba([255u8, 0, 0, 255]));
-        let output = render_frame(&img);
+        let output = render_frame(&img, 1);
         let out_str = String::from_utf8_lossy(&output);
         assert!(out_str.starts_with("\x1b7"));      // DECSC
         assert!(out_str.contains("\x1b[1;1H"));     // cursor to origin
@@ -144,5 +157,14 @@ mod tests {
         assert!(out_str.contains("a=T,f=32"));      // transmit RGBA
         assert!(out_str.contains("s=2,v=2"));       // dimensions
         assert!(out_str.ends_with("\x1b8"));         // DECRC
+    }
+
+    #[test]
+    fn test_render_frame_scaled() {
+        use image::{ImageBuffer, Rgba};
+        let img = ImageBuffer::from_fn(2, 2, |_x, _y| Rgba([255u8, 0, 0, 255]));
+        let output = render_frame(&img, 3);
+        let out_str = String::from_utf8_lossy(&output);
+        assert!(out_str.contains("s=6,v=6")); // 2*3=6
     }
 }
