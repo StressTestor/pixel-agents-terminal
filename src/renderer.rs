@@ -1,0 +1,1 @@
+// Kitty graphics protocol renderer
