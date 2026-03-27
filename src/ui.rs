@@ -61,21 +61,32 @@ fn glob_transcripts(root: &Path) -> io::Result<Vec<PathBuf>> {
         if !project_entry.file_type()?.is_dir() {
             continue;
         }
-        let sessions_dir = project_entry.path().join("sessions");
-        if !sessions_dir.is_dir() {
-            continue;
-        }
-        for session_entry in std::fs::read_dir(&sessions_dir)? {
-            let session_entry = session_entry?;
-            if !session_entry.file_type()?.is_dir() {
+
+        // Claude Code stores sessions as {uuid}.jsonl directly under the project dir
+        // (not in a sessions/ subdirectory)
+        for file_entry in std::fs::read_dir(project_entry.path())? {
+            let file_entry = file_entry?;
+            let path = file_entry.path();
+
+            // Match *.jsonl files (session transcripts are {uuid}.jsonl)
+            if path.extension().and_then(|e| e.to_str()) != Some("jsonl") {
                 continue;
             }
-            let transcript = session_entry.path().join("transcript.jsonl");
-            if transcript.is_file() {
-                // Only include files with content (prevents phantom agents)
-                if let Ok(meta) = std::fs::metadata(&transcript) {
-                    if meta.len() > 0 {
-                        results.push(transcript);
+            if !path.is_file() {
+                continue;
+            }
+
+            // Only include files with content (prevents phantom agents)
+            if let Ok(meta) = std::fs::metadata(&path) {
+                if meta.len() > 0 {
+                    // Only include recently active files (modified in last 10 minutes)
+                    // to avoid spawning agents for every old session
+                    if let Ok(modified) = meta.modified() {
+                        if let Ok(elapsed) = modified.elapsed() {
+                            if elapsed.as_secs() < 600 {
+                                results.push(path);
+                            }
+                        }
                     }
                 }
             }
